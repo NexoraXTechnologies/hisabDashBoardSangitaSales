@@ -1,0 +1,2 @@
+# hisabDashBoardSangitaSales
+oracle configuration part 
