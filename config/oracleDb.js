@@ -185,4 +185,4 @@ module.exports = {
   getOracleConnection,
   testOracleConnection,
   closeOraclePool,
-};1 ``
+};

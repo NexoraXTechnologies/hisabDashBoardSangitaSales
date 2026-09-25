@@ -9,6 +9,11 @@ const {
   closeOraclePool,
 } = require("./config/oracleDb");
 
+const {
+  startOrderWatcher,
+  stopOrderWatcher,
+} = require("./services/watchers/purchaseOrderWatcher");
+
 const app = express();
 
 app.use(cors());
@@ -80,6 +85,9 @@ const connectOracleDatabase = async () => {
     console.log(
       "[ORACLE_DB] Oracle Database connected successfully"
     );
+
+    // ⭐ Start Purchase Order watcher only after Oracle is connected
+    await startOrderWatcher();
   } catch (error) {
     oracleConnected = false;
 
@@ -105,6 +113,9 @@ const shutdown = async (signal) => {
     server.close(() => {
       console.log("[SERVER] HTTP server closed");
     });
+
+    // ⭐ Stop watcher before closing Oracle pool
+    stopOrderWatcher();
 
     await closeOraclePool();
 
