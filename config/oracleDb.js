@@ -2,16 +2,24 @@ const oracledb = require("oracledb");
 
 let pool = null;
 
-if (
-  process.platform === "win32" &&
-  process.env.ORACLE_CLIENT_LIB_DIR
-) {
+// ⭐ Oracle 11g requires node-oracledb Thick mode
+const initializeOracleClient = () => {
   try {
+    const clientLibDir = process.env.ORACLE_CLIENT_LIB_DIR;
+
+    if (!clientLibDir) {
+      throw new Error(
+        "ORACLE_CLIENT_LIB_DIR is not configured. Oracle 11g requires Oracle Thick mode."
+      );
+    }
+
     oracledb.initOracleClient({
-      libDir: process.env.ORACLE_CLIENT_LIB_DIR,
+      libDir: clientLibDir,
     });
 
-    console.log("[ORACLE_DB] Oracle Thick mode initialized");
+    console.log("[ORACLE_DB] Oracle Client initialized successfully");
+    console.log("[ORACLE_DB] Mode: Thick");
+    console.log("[ORACLE_DB] Client Library:", clientLibDir);
   } catch (error) {
     console.error(
       "[ORACLE_DB] Failed to initialize Oracle Client:",
@@ -20,11 +28,17 @@ if (
 
     throw error;
   }
-}
+};
+
+// ⭐ IMPORTANT:
+// initOracleClient must run BEFORE createPool/getConnection
+initializeOracleClient();
 
 const initializeOraclePool = async () => {
   try {
     if (pool) {
+      console.log("[ORACLE_DB] Connection pool already initialized");
+
       return pool;
     }
 
@@ -36,28 +50,38 @@ const initializeOraclePool = async () => {
 
     const connectString = `${host}:${port}/${serviceName}`;
 
-    console.log("[ORACLE_DB] Initializing connection pool");
+    console.log("[ORACLE_DB] Initializing Oracle connection pool...");
     console.log("[ORACLE_DB] Host:", host);
     console.log("[ORACLE_DB] Port:", port);
     console.log("[ORACLE_DB] Service:", serviceName);
+    console.log("[ORACLE_DB] Connect String:", connectString);
 
     pool = await oracledb.createPool({
       user,
       password,
       connectString,
-      poolMin: Number(process.env.ORACLE_DB_POOL_MIN || 1),
-      poolMax: Number(process.env.ORACLE_DB_POOL_MAX || 5),
+
+      poolMin: Number(
+        process.env.ORACLE_DB_POOL_MIN || 1
+      ),
+
+      poolMax: Number(
+        process.env.ORACLE_DB_POOL_MAX || 5
+      ),
+
       poolIncrement: Number(
         process.env.ORACLE_DB_POOL_INCREMENT || 1
       ),
     });
 
-    console.log("[ORACLE_DB] Connection pool initialized successfully");
+    console.log(
+      "[ORACLE_DB] Connection pool initialized successfully"
+    );
 
     return pool;
   } catch (error) {
     console.error(
-      "[ORACLE_DB] Pool initialization failed:",
+      "[ORACLE_DB] Failed to initialize connection pool:",
       error.message
     );
 
@@ -71,7 +95,13 @@ const getOracleConnection = async () => {
       await initializeOraclePool();
     }
 
-    return await pool.getConnection();
+    const connection = await pool.getConnection();
+
+    console.log(
+      "[ORACLE_DB] Connection acquired successfully"
+    );
+
+    return connection;
   } catch (error) {
     console.error(
       "[ORACLE_DB] Failed to get connection:",
@@ -93,7 +123,11 @@ const testOracleConnection = async () => {
     );
 
     console.log(
-      "[ORACLE_DB] Database connection test successful:",
+      "[ORACLE_DB] Database connection test successful"
+    );
+
+    console.log(
+      "[ORACLE_DB] Test result:",
       result.rows
     );
 
@@ -107,7 +141,18 @@ const testOracleConnection = async () => {
     return false;
   } finally {
     if (connection) {
-      await connection.close();
+      try {
+        await connection.close();
+
+        console.log(
+          "[ORACLE_DB] Test connection released"
+        );
+      } catch (error) {
+        console.error(
+          "[ORACLE_DB] Failed to release test connection:",
+          error.message
+        );
+      }
     }
   }
 };
@@ -122,7 +167,9 @@ const closeOraclePool = async () => {
 
     pool = null;
 
-    console.log("[ORACLE_DB] Connection pool closed");
+    console.log(
+      "[ORACLE_DB] Connection pool closed successfully"
+    );
   } catch (error) {
     console.error(
       "[ORACLE_DB] Failed to close connection pool:",
@@ -138,4 +185,4 @@ module.exports = {
   getOracleConnection,
   testOracleConnection,
   closeOraclePool,
-};
+};1 ``
