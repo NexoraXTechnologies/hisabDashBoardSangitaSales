@@ -29,7 +29,24 @@ const toAmount = (value) => {
 };
 
 
-// ⭐ GET FINEZ VENDOR
+// 🟣⭐ FORMAT ORACLE DATE
+
+const formatOracleDate = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString();
+};
+
+
+// 🟣⭐ GET FINEZ VENDOR USING LHS ACC CODE
 
 const getFineZVendorByLhsCode = async ({
   accCode,
@@ -43,6 +60,10 @@ const getFineZVendorByLhsCode = async ({
   let offset = 0;
 
   const limit = 100;
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Looking for vendor using LHSACCCode: ${accCode}`
+  );
 
   while (true) {
     const response = await apiGet(
@@ -63,6 +84,10 @@ const getFineZVendorByLhsCode = async ({
       response?.data?.items ||
       [];
 
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Checking ${items.length} vendor(s), offset ${offset}`
+    );
+
     const account = items.find((item) => {
       return (
         normalizeValue(
@@ -72,6 +97,10 @@ const getFineZVendorByLhsCode = async ({
     });
 
     if (account) {
+      console.log(
+        `[FINEZ_PURCHASE_ORDER] Vendor resolved ${accCode} → ${account.accountCode} - ${account.accountName}`
+      );
+
       return account;
     }
 
@@ -79,6 +108,10 @@ const getFineZVendorByLhsCode = async ({
       response?.data?.pagination?.hasNextPage === true;
 
     if (!hasNextPage) {
+      console.log(
+        `[FINEZ_PURCHASE_ORDER] Vendor not found for LHSACCCode: ${accCode}`
+      );
+
       return null;
     }
 
@@ -87,7 +120,7 @@ const getFineZVendorByLhsCode = async ({
 };
 
 
-// ⭐ GET FINEZ CUSTOM MASTER
+// 🟣⭐ GET FINEZ CUSTOM MASTER USING ORACLE CODE
 
 const getFineZCustomMasterByCode = async ({
   moduleCode,
@@ -96,6 +129,10 @@ const getFineZCustomMasterByCode = async ({
   authtoken,
   loginuser,
 }) => {
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Looking for Custom Master ${moduleCode} using code: ${code}`
+  );
+
   const response = await apiGet(
     "/users/customMaster/data/getAll",
     {
@@ -118,13 +155,17 @@ const getFineZCustomMasterByCode = async ({
     [];
 
   if (!Array.isArray(records)) {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Invalid Custom Master response for ${moduleCode}`
+    );
+
     return null;
   }
 
   const normalizedCode =
     normalizeValue(code);
 
-  return (
+  const customMaster =
     records.find((record) => {
       const existingCode =
         record?.code ||
@@ -135,13 +176,30 @@ const getFineZCustomMasterByCode = async ({
         normalizeValue(existingCode) ===
         normalizedCode
       );
-    }) || null
-  );
+    }) || null;
+
+  if (customMaster) {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Custom Master resolved ${moduleCode} - ${code}`
+    );
+
+    console.dir(
+      customMaster,
+      {
+        depth: null,
+      }
+    );
+  } else {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Custom Master not found ${moduleCode} - ${code}`
+    );
+  }
+
+  return customMaster;
 };
 
 
-// ⭐ GET FINEZ PRODUCT
-// Update API/response mapping here once your exact Product Master GET API is confirmed.
+// 🟣⭐ GET PRODUCT USING dynamicFields.LHSItemCode
 
 const getFineZProductByLhsCode = async ({
   itemCode,
@@ -149,6 +207,10 @@ const getFineZProductByLhsCode = async ({
   authtoken,
   loginuser,
 }) => {
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Looking for product using LHSItemCode: ${itemCode}`
+  );
+
   const response = await apiGet(
     "/users/productMaster/getAll",
     {
@@ -165,33 +227,55 @@ const getFineZProductByLhsCode = async ({
   const products =
     response?.data?.items ||
     response?.data ||
+    response?.records ||
+    response?.result ||
     [];
 
   if (!Array.isArray(products)) {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Invalid Product Master response`
+    );
+
     return null;
   }
 
   const normalizedItemCode =
     normalizeValue(itemCode);
 
-  return (
+  const product =
     products.find((product) => {
       const lhsItemCode =
         product?.dynamicFields?.LHSItemCode ||
-        product?.itemCode ||
-        product?.productCode ||
         "";
 
       return (
         normalizeValue(lhsItemCode) ===
         normalizedItemCode
       );
-    }) || null
-  );
+    }) || null;
+
+  if (product) {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Product resolved ${itemCode} → ${product.productCode || ""} - ${product.productName || ""}`
+    );
+
+    console.dir(
+      product,
+      {
+        depth: null,
+      }
+    );
+  } else {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Product not found for LHSItemCode: ${itemCode}`
+    );
+  }
+
+  return product;
 };
 
 
-// ⭐ BUILD PURCHASE ORDER PAYLOAD
+// 🟣⭐ BUILD FINAL PURCHASE ORDER PAYLOAD
 
 const buildPurchaseOrderPayload = ({
   rows,
@@ -200,197 +284,253 @@ const buildPurchaseOrderPayload = ({
   costCenter,
   products,
 }) => {
-  if (!Array.isArray(rows) || rows.length === 0) {
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
     throw new Error(
       "Purchase order rows are required"
     );
   }
 
-  const firstRow = rows[0];
+  const firstRow =
+    rows[0];
 
   let totalQuantity = 0;
   let totalGrossAmount = 0;
+  let totalDiscountAmount = 0;
+  let totalCgstAmount = 0;
+  let totalSgstAmount = 0;
+  let totalIgstAmount = 0;
   let totalTaxAmount = 0;
+  let totalOtherAmount = 0;
   let totalNetAmount = 0;
 
-  const pOrdBody = rows.map((row, index) => {
-    const product =
-      products[index];
+  const pOrdBody =
+    rows.map((row, index) => {
+      const product =
+        products[index];
 
-    const quantity =
-      toNumber(row.QTYORDER) -
-      toNumber(row.QTYCANCELLED);
+      // 🟣⭐ Excel Mapping: QTYORDER → quantity
+      const quantity =
+        toNumber(row.QTYORDER);
 
-    const rate =
-      toNumber(row.RATE);
+      // 🟣⭐ Excel Mapping: RATE → rate
+      const rate =
+        toNumber(row.RATE);
 
-    const grossAmount =
-      quantity * rate;
+      // 🟣⭐ Excel Mapping: TAX_ONAMOUNT → gross
+      const grossAmount =
+        toNumber(row.TAX_ONAMOUNT);
 
-    const taxableAmount =
-      row.TAX_ONAMOUNT !== null &&
-      row.TAX_ONAMOUNT !== undefined
-        ? toNumber(row.TAX_ONAMOUNT)
-        : grossAmount;
+      /*
+       * 🟣⭐ Not mapped/provided currently.
+       * Keep empty/zero instead of inventing values.
+       */
 
-    const taxPercentage =
-      toNumber(row.TAX_RATE1);
+      const discountAmount = 0;
 
-    const taxAmount =
-      toNumber(row.TAX_AMOUNT1);
+      const cgstAmount = 0;
 
-    const cgstPercentage =
-      taxPercentage
-        ? taxPercentage / 2
-        : 0;
+      const sgstAmount = 0;
 
-    const sgstPercentage =
-      taxPercentage
-        ? taxPercentage / 2
-        : 0;
+      const igstAmount = 0;
 
-    const cgstAmount =
-      taxAmount
-        ? taxAmount / 2
-        : 0;
+      const taxAmount = 0;
 
-    const sgstAmount =
-      taxAmount
-        ? taxAmount / 2
-        : 0;
+      const otherAmount = 0;
 
-    const netAmount =
-      taxableAmount +
-      taxAmount;
+      const taxableAmount =
+        grossAmount -
+        discountAmount;
 
-    totalQuantity += quantity;
-    totalGrossAmount += grossAmount;
-    totalTaxAmount += taxAmount;
-    totalNetAmount += netAmount;
+      const netAmount =
+        taxableAmount +
+        taxAmount +
+        otherAmount;
 
-    return {
-      productCode:
-        product?.productCode || "",
+      totalQuantity +=
+        quantity;
 
-      productName:
-        product?.productName || "",
+      totalGrossAmount +=
+        grossAmount;
 
-      productId:
-        product?._id || "",
+      totalDiscountAmount +=
+        discountAmount;
 
-      productDescription:
-        product?.productDescription ||
-        product?.productName ||
-        "",
+      totalCgstAmount +=
+        cgstAmount;
 
-      description:
-        product?.productDescription ||
-        product?.productName ||
-        "",
+      totalSgstAmount +=
+        sgstAmount;
 
-      productHSNCode:
-        product?.productHSNCode ||
-        product?.hsnCode ||
-        "",
+      totalIgstAmount +=
+        igstAmount;
 
-      remarks:
-        row.AFIELD8 || "",
+      totalTaxAmount +=
+        taxAmount;
 
-      quantity:
-        String(quantity),
+      totalOtherAmount +=
+        otherAmount;
 
-      unit:
-        product?.unit ||
-        product?.uom ||
-        "",
+      totalNetAmount +=
+        netAmount;
 
-      uom:
-        product?.uom ||
-        product?.unit ||
-        "",
+      return {
+        // 🟣⭐ Product Master data resolved using Oracle ITEM_CODE
+        productCode:
+          product?.productCode ||
+          "",
 
-      rate:
-        String(rate),
+        productName:
+          product?.productName ||
+          "",
 
-      gross:
-        toAmount(grossAmount),
+        productId:
+          product?._id ||
+          product?.productId ||
+          "",
 
-      grossAmount:
-        toAmount(grossAmount),
+        productDescription:
+          product?.productDescription ||
+          product?.description ||
+          "",
 
-      discount: "",
+        description:
+          product?.productDescription ||
+          product?.description ||
+          "",
 
-      discountPercentage: "",
+        productHSNCode:
+          product?.productHSNCode ||
+          product?.hsnCode ||
+          "",
 
-      discountAmount:
-        "0.00",
+        remarks: "",
 
-      taxableAmount:
-        toAmount(taxableAmount),
+        quantity:
+          String(quantity),
 
-      cgst:
-        cgstPercentage
-          ? String(cgstPercentage)
-          : "",
+        // 🟣⭐ Take UOM from Product Master
+        unit:
+          product?.unit ||
+          product?.uom ||
+          "",
 
-      cgstPercentage:
-        cgstPercentage
-          ? String(cgstPercentage)
-          : "",
+        uom:
+          product?.uom ||
+          product?.unit ||
+          "",
 
-      cgstAmount:
-        toAmount(cgstAmount),
+        rate:
+          String(rate),
 
-      sgst:
-        sgstPercentage
-          ? String(sgstPercentage)
-          : "",
+        gross:
+          toAmount(grossAmount),
 
-      sgstPercentage:
-        sgstPercentage
-          ? String(sgstPercentage)
-          : "",
+        grossAmount:
+          toAmount(grossAmount),
 
-      sgstAmount:
-        toAmount(sgstAmount),
+        // 🟣⭐ Not supplied by current mapping
+        discount: "",
 
-      igst: "",
+        discountPercentage: "",
 
-      igstPercentage: "",
+        discountAmount:
+          toAmount(discountAmount),
 
-      igstAmount:
-        "0.00",
+        taxableAmount:
+          toAmount(taxableAmount),
 
-      taxAmount:
-        toAmount(taxAmount),
+        // 🟣⭐ Tax mapping not finalized yet
+        cgst: "",
 
-      otherAmount:
-        "0.00",
+        cgstPercentage: "",
 
-      netAmount:
-        toAmount(netAmount),
+        cgstAmount:
+          toAmount(cgstAmount),
 
-      netTotal:
-        toAmount(netAmount),
-    };
-  });
+        sgst: "",
 
-  return {
+        sgstPercentage: "",
+
+        sgstAmount:
+          toAmount(sgstAmount),
+
+        igst: "",
+
+        igstPercentage: "",
+
+        igstAmount:
+          toAmount(igstAmount),
+
+        taxAmount:
+          toAmount(taxAmount),
+
+        otherAmount:
+          toAmount(otherAmount),
+
+        netAmount:
+          toAmount(netAmount),
+
+        netTotal:
+          toAmount(netAmount),
+      };
+    });
+
+  // 🟣⭐ Extract Custom Master actual code/name
+
+  const mineCode =
+    mineMaster?.code ||
+    mineMaster?.data?.code ||
+    firstRow.MAKE_CODE ||
+    "";
+
+  const mineName =
+    mineMaster?.name ||
+    mineMaster?.data?.name ||
+    "";
+
+  const costCenterCode =
+    costCenter?.code ||
+    costCenter?.data?.code ||
+    firstRow.COST_CODE ||
+    "";
+
+  const costCenterName =
+    costCenter?.name ||
+    costCenter?.data?.name ||
+    "";
+
+  const payload = {
+    // 🟣⭐ Excel Mapping: VRNO → lhsPoVrNo
+    lhsPoVrNo:
+      firstRow.VRNO || "",
+
+    // 🟣⭐ Excel Mapping: VRDATE → Purchase Order Date
     pOrdVoucherDate:
-      firstRow.VRDATE,
+      formatOracleDate(
+        firstRow.VRDATE
+      ),
 
+    // 🟣⭐ ACC_CODE resolved from FineEZ Account Master
     pOrdVendorCode:
-      vendor.accountCode,
+      vendor?.accountCode ||
+      "",
 
     pOrdVendorName:
-      vendor.accountName,
+      vendor?.accountName ||
+      "",
 
     pOrdPurchaseAccount: "",
 
     pOrdStatus:
       "open",
 
-    pOrdRemark: "",
+    // 🟣⭐ Excel Mapping: ENTRY_REMARK → Remarks
+    pOrdRemark:
+      firstRow.ENTRY_REMARK ||
+      "",
 
     transportOrderNumber: "",
 
@@ -404,29 +544,24 @@ const buildPurchaseOrderPayload = ({
 
     vehicleName: "",
 
+    // 🟣⭐ Excel Mapping:
+    // MAKE_CODE → Mine Master
+    // COST_CODE → Cost Center
     customMasters: {
       "Mine Master": {
         code:
-          mineMaster?.code ||
-          mineMaster?.data?.code ||
-          firstRow.MAKE_CODE,
+          mineCode,
 
         name:
-          mineMaster?.name ||
-          mineMaster?.data?.name ||
-          "",
+          mineName,
       },
 
       "Cost Center": {
         code:
-          costCenter?.code ||
-          costCenter?.data?.code ||
-          firstRow.COST_CODE,
+          costCenterCode,
 
         name:
-          costCenter?.name ||
-          costCenter?.data?.name ||
-          "",
+          costCenterName,
       },
     },
 
@@ -434,66 +569,103 @@ const buildPurchaseOrderPayload = ({
 
     pOrdFooter: {
       grossAmount:
-        toAmount(totalGrossAmount),
+        toAmount(
+          totalGrossAmount
+        ),
 
       discountAmount:
-        "0.00",
+        toAmount(
+          totalDiscountAmount
+        ),
 
       cgstAmount:
-        toAmount(totalTaxAmount / 2),
+        toAmount(
+          totalCgstAmount
+        ),
 
       sgstAmount:
-        toAmount(totalTaxAmount / 2),
+        toAmount(
+          totalSgstAmount
+        ),
 
       igstAmount:
-        "0.00",
+        toAmount(
+          totalIgstAmount
+        ),
 
       taxAmount:
-        toAmount(totalTaxAmount),
+        toAmount(
+          totalTaxAmount
+        ),
 
       otherAmount:
-        "0.00",
+        toAmount(
+          totalOtherAmount
+        ),
 
       netAmount:
-        toAmount(totalNetAmount),
+        toAmount(
+          totalNetAmount
+        ),
 
       adjustedAmount:
         "0",
 
       balanceAmount:
-        toAmount(totalNetAmount),
+        toAmount(
+          totalNetAmount
+        ),
 
       totalQuantity,
 
       totalGrossAmount:
-        toAmount(totalGrossAmount),
+        toAmount(
+          totalGrossAmount
+        ),
 
       totalDiscountAmount:
-        "0.00",
+        toAmount(
+          totalDiscountAmount
+        ),
 
       totalCgstAmount:
-        toAmount(totalTaxAmount / 2),
+        toAmount(
+          totalCgstAmount
+        ),
 
       totalSgstAmount:
-        toAmount(totalTaxAmount / 2),
+        toAmount(
+          totalSgstAmount
+        ),
 
       totalIgstAmount:
-        "0.00",
+        toAmount(
+          totalIgstAmount
+        ),
 
       totalTaxAmount:
-        toAmount(totalTaxAmount),
+        toAmount(
+          totalTaxAmount
+        ),
 
       totalOtherAmount:
-        "0.00",
+        toAmount(
+          totalOtherAmount
+        ),
 
       totalNetAmount:
-        toAmount(totalNetAmount),
+        toAmount(
+          totalNetAmount
+        ),
     },
   };
+
+  return payload;
 };
 
 
-// ⭐ SEND PURCHASE ORDER
+// 🟣⭐ PREPARE PURCHASE ORDER
+// POST IS INTENTIONALLY COMMENTED FOR NOW
 
 const sendPurchaseOrderToBookEZ = async ({
   vrno,
@@ -502,7 +674,19 @@ const sendPurchaseOrderToBookEZ = async ({
   loginuser,
 }) => {
   console.log(
-    `[FINEZ_PURCHASE_ORDER] Processing ${vrno}`
+    "============================================================"
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Starting Purchase Order preparation`
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Oracle VRNO: ${vrno}`
+  );
+
+  console.log(
+    "============================================================"
   );
 
   const rows =
@@ -510,14 +694,48 @@ const sendPurchaseOrderToBookEZ = async ({
       vrno
     );
 
-  if (!rows.length) {
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
     throw new Error(
-      `Purchase order ${vrno} not found`
+      `Purchase order ${vrno} not found in Oracle`
     );
   }
 
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] ${rows.length} body row(s) received from Oracle`
+  );
+
+  console.log(
+    "[FINEZ_PURCHASE_ORDER] Oracle Purchase Order rows:"
+  );
+
+  console.dir(
+    rows,
+    {
+      depth: null,
+    }
+  );
+
   const firstRow =
     rows[0];
+
+  console.log(
+    "[FINEZ_PURCHASE_ORDER] Resolving FineEZ masters..."
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] ACC_CODE: ${firstRow.ACC_CODE}`
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] MAKE_CODE: ${firstRow.MAKE_CODE}`
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] COST_CODE: ${firstRow.COST_CODE}`
+  );
 
   const [
     vendor,
@@ -560,25 +778,33 @@ const sendPurchaseOrderToBookEZ = async ({
 
   if (!vendor) {
     throw new Error(
-      `FineEZ vendor not found for ACC_CODE ${firstRow.ACC_CODE}`
+      `FineEZ vendor not found for Oracle ACC_CODE ${firstRow.ACC_CODE}`
     );
   }
 
   if (!mineMaster) {
     throw new Error(
-      `FineEZ Mine Master not found for MAKE_CODE ${firstRow.MAKE_CODE}`
+      `FineEZ Mine Master not found for Oracle MAKE_CODE ${firstRow.MAKE_CODE}`
     );
   }
 
   if (!costCenter) {
     throw new Error(
-      `FineEZ Cost Center not found for COST_CODE ${firstRow.COST_CODE}`
+      `FineEZ Cost Center not found for Oracle COST_CODE ${firstRow.COST_CODE}`
     );
   }
+
+  console.log(
+    "[FINEZ_PURCHASE_ORDER] Header masters resolved successfully"
+  );
 
   const products = [];
 
   for (const row of rows) {
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Resolving product for Oracle ITEM_CODE: ${row.ITEM_CODE}`
+    );
+
     const product =
       await getFineZProductByLhsCode({
         itemCode:
@@ -595,8 +821,14 @@ const sendPurchaseOrderToBookEZ = async ({
       );
     }
 
-    products.push(product);
+    products.push(
+      product
+    );
   }
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] ${products.length} product(s) resolved successfully`
+  );
 
   const payload =
     buildPurchaseOrderPayload({
@@ -608,7 +840,15 @@ const sendPurchaseOrderToBookEZ = async ({
     });
 
   console.log(
-    `[FINEZ_PURCHASE_ORDER] Final payload for ${vrno}:`
+    "============================================================"
+  );
+
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] FINAL PAYLOAD FOR ${vrno}`
+  );
+
+  console.log(
+    "============================================================"
   );
 
   console.dir(
@@ -618,21 +858,41 @@ const sendPurchaseOrderToBookEZ = async ({
     }
   );
 
-//   const response = await apiPost(
-//     "/users/bookez/purchaseFlow/purchaseOrder/save",
-//     payload,
-//     {
-//       dbName,
-//       authtoken,
-//       loginuser,
-//     }
-//   );
+  console.log(
+    "============================================================"
+  );
 
-//   console.log(
-//     `[FINEZ_PURCHASE_ORDER] Purchase order ${vrno} saved successfully`
-//   );
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Payload prepared successfully. API POST is currently disabled.`
+  );
 
-  return response;
+  console.log(
+    "============================================================"
+  );
+
+
+  // 🟣⭐ KEEP POST COMMENTED UNTIL PAYLOAD IS VERIFIED
+
+  // const response = await apiPost(
+  //   "/users/bookez/purchaseFlow/purchaseOrder/save",
+  //   payload,
+  //   {
+  //     dbName,
+  //     authtoken,
+  //     loginuser,
+  //   }
+  // );
+
+  // console.log(
+  //   `[FINEZ_PURCHASE_ORDER] Purchase order ${vrno} saved successfully`
+  // );
+
+  // return response;
+
+
+  // 🟣⭐ FOR NOW RETURN ONLY GENERATED PAYLOAD
+
+  return payload;
 };
 
 module.exports = {

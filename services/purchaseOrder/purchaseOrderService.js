@@ -100,10 +100,16 @@ const getPurchaseOrderData = async (vrno) => {
 
 // ⭐ PURCHASE ORDER TRANSACTION DATA
 
+// 🟣⭐ PURCHASE ORDER TRANSACTION DATA
+
 const getPurchaseOrderTransactionData = async (vrno) => {
   let connection;
 
   try {
+    console.log(
+      `[PURCHASE_ORDER] Fetching transaction data for VRNO: ${vrno}`
+    );
+
     connection = await getOracleConnection();
 
     const result = await connection.execute(
@@ -111,6 +117,7 @@ const getPurchaseOrderTransactionData = async (vrno) => {
       SELECT
         OH.VRNO,
         OH.VRDATE,
+        OH.ENTRY_REMARK,
         OH.ACC_CODE,
         OB.MAKE_CODE,
         OB.COST_CODE,
@@ -136,6 +143,17 @@ const getPurchaseOrderTransactionData = async (vrno) => {
       }
     );
 
+    console.log(
+      `[PURCHASE_ORDER] ${result.rows?.length || 0} transaction row(s) found for ${vrno}`
+    );
+
+    console.dir(
+      result.rows || [],
+      {
+        depth: null,
+      }
+    );
+
     return result.rows || [];
   } catch (error) {
     console.error(
@@ -147,6 +165,10 @@ const getPurchaseOrderTransactionData = async (vrno) => {
   } finally {
     if (connection) {
       await connection.close();
+
+      console.log(
+        `[PURCHASE_ORDER] Oracle connection released for ${vrno}`
+      );
     }
   }
 };
