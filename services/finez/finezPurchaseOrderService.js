@@ -7,8 +7,8 @@ const {
   getPurchaseOrderTransactionData,
 } = require("../purchaseOrder/purchaseOrderService");
 
-const MINE_MASTER_MODULE_CODE = "CSTM-000002";
-const COST_CENTER_MODULE_CODE = "CSTM-000001";
+const MINE_MASTER_MODULE_CODE = "CSTM-000001";
+const COST_CENTER_MODULE_CODE = "CSTM-000002";
 
 const normalizeValue = (value) => {
   return String(value || "")
