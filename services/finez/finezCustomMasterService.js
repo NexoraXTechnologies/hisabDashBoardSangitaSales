@@ -198,6 +198,186 @@ const saveMineMaster = async ({
   });
 };
 
+// ⭐ ACCOUNT MASTER START
+
+
+const getVendorAccounts = async ({
+  dbName,
+  authtoken,
+  loginuser,
+  offset = 0,
+  limit = 100,
+}) => {
+  const response = await apiGet(
+    "/accountMaster/getAllAccounts",
+    {
+      dbName,
+      authtoken,
+      loginuser,
+      params: {
+        offset,
+        limit,
+        accountType: "vendor",
+      },
+    }
+  );
+
+  return response;
+};
+
+const accountMasterAlreadyExists = async ({
+  accCode,
+  dbName,
+  authtoken,
+  loginuser,
+}) => {
+  if (!accCode) {
+    return false;
+  }
+
+  const normalizedAccCode = String(accCode)
+    .trim()
+    .toLowerCase();
+
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const response = await getVendorAccounts({
+      dbName,
+      authtoken,
+      loginuser,
+      offset,
+      limit,
+    });
+
+    const items =
+      response?.data?.items ||
+      [];
+
+    const alreadyExists = items.some((account) => {
+      const existingLhsAccCode = String(
+        account?.dynamicFields?.LHSACCCode ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+      return existingLhsAccCode === normalizedAccCode;
+    });
+
+    if (alreadyExists) {
+      return true;
+    }
+
+    const hasNextPage =
+      response?.data?.pagination?.hasNextPage === true;
+
+    if (!hasNextPage) {
+      return false;
+    }
+
+    offset += limit;
+  }
+};
+
+const saveAccountMaster = async ({
+  accountMaster,
+  dbName,
+  authtoken,
+  loginuser,
+}) => {
+  if (!accountMaster) {
+    console.log(
+      "[FINEZ_ACCOUNT_MASTER] Account Master not found. Skipping."
+    );
+
+    return null;
+  }
+
+  if (
+    !accountMaster.ACC_CODE ||
+    !accountMaster.ACC_NAME
+  ) {
+    console.log(
+      "[FINEZ_ACCOUNT_MASTER] Account code/name missing. Skipping.",
+      accountMaster
+    );
+
+    return null;
+  }
+
+  const alreadyExists =
+    await accountMasterAlreadyExists({
+      accCode: accountMaster.ACC_CODE,
+      dbName,
+      authtoken,
+      loginuser,
+    });
+
+  if (alreadyExists) {
+    console.log(
+      `[FINEZ_ACCOUNT_MASTER] Duplicate found by LHSACCCode. Skipping ${accountMaster.ACC_CODE} - ${accountMaster.ACC_NAME}`
+    );
+
+    return {
+      success: true,
+      skipped: true,
+      reason: "ALREADY_EXISTS",
+      accCode: accountMaster.ACC_CODE,
+      accountName: accountMaster.ACC_NAME,
+    };
+  }
+
+  const payload = {
+    accountName: accountMaster.ACC_NAME,
+    accountType: "vendor",
+    accountMobile: "",
+    accountEmail: "",
+    accountCreditLimit: "",
+    accountAddress: "",
+    state: "",
+    city: "",
+    gstNumber: "",
+    dynamicFields: {
+      LHSACCCode: accountMaster.ACC_CODE,
+    },
+  };
+
+  console.log(
+    `[FINEZ_ACCOUNT_MASTER] Creating vendor ${accountMaster.ACC_CODE}:`,
+    payload
+  );
+
+  try {
+    const response = await apiPost(
+      "/accountMaster/createAccount",
+      payload,
+      {
+        dbName,
+        authtoken,
+        loginuser,
+      }
+    );
+
+    console.log(
+      `[FINEZ_ACCOUNT_MASTER] Saved successfully ${accountMaster.ACC_CODE} - ${accountMaster.ACC_NAME}`
+    );
+
+    return response;
+  } catch (error) {
+    console.error(
+      `[FINEZ_ACCOUNT_MASTER] Failed to save ${accountMaster.ACC_CODE} - ${accountMaster.ACC_NAME}:`,
+      error
+    );
+
+    throw error;
+  }
+};
+
+// ⭐ ACCOUNT MASTER END
+
+
 const saveCostCenter = async ({
   costMaster,
   dbName,
@@ -282,5 +462,10 @@ module.exports = {
   saveCustomMasterData,
   saveMineMaster,
   saveCostCenter,
+    // ⭐ ACCOUNT MASTER
+  getVendorAccounts,
+  accountMasterAlreadyExists,
+  saveAccountMaster,
+
   syncPurchaseOrderMastersToFinez,
 };
