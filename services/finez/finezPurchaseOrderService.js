@@ -208,7 +208,7 @@ const getFineZProductByLhsCode = async ({
   loginuser,
 }) => {
   console.log(
-    `[FINEZ_PURCHASE_ORDER] Looking for product using LHSItemCode: ${itemCode}`
+    `[FINEZ_PURCHASE_ORDER] Looking for product using LhsItemCode: ${itemCode}`
   );
 
   const normalizedItemCode =
@@ -234,13 +234,10 @@ const getFineZProductByLhsCode = async ({
 
     const products =
       response?.data?.items ||
-      response?.data ||
-      response?.records ||
-      response?.result ||
       [];
 
     console.log(
-      `[FINEZ_PURCHASE_ORDER] Checking ${Array.isArray(products) ? products.length : 0} product(s), offset ${offset}`
+      `[FINEZ_PURCHASE_ORDER] Checking ${products.length} product(s), offset ${offset}`
     );
 
     if (!Array.isArray(products)) {
@@ -258,9 +255,26 @@ const getFineZProductByLhsCode = async ({
       return null;
     }
 
+    // 🟣⭐ Log available LHS item mappings
+    console.log(
+      "[FINEZ_PURCHASE_ORDER] Available Product LhsItemCode mappings:"
+    );
+
+    for (const product of products) {
+      console.log(
+        `  ${product.productCode || ""} -> ${
+          product?.dynamicFields?.LhsItemCode ||
+          product?.dynamicFields?.LHSItemCode ||
+          ""
+        }`
+      );
+    }
+
     const product =
       products.find((product) => {
+        // 🟣⭐ Actual DB field is LhsItemCode
         const lhsItemCode =
+          product?.dynamicFields?.LhsItemCode ||
           product?.dynamicFields?.LHSItemCode ||
           "";
 
@@ -290,7 +304,7 @@ const getFineZProductByLhsCode = async ({
 
     if (!hasNextPage) {
       console.log(
-        `[FINEZ_PURCHASE_ORDER] Product not found for LHSItemCode: ${itemCode}`
+        `[FINEZ_PURCHASE_ORDER] Product not found for LhsItemCode: ${itemCode}`
       );
 
       return null;
