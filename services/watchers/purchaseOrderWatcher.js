@@ -11,6 +11,7 @@ const {
 const {
   syncPurchaseOrderMastersToFinez,
 } = require("../finez/finezCustomMasterService");
+const { sendPurchaseOrderToBookEZ } = require("../finez/finezPurchaseOrderService");
 
 let orderWatcherInterval = null;
 let orderWatcherInitialized = false;
@@ -117,7 +118,12 @@ const checkForNewOrderRecords = async () => {
       );
 
       // ⭐ Future
-      // await sendPurchaseOrderToBookEZ(purchaseOrderData);
+   await sendPurchaseOrderToBookEZ({
+  vrno: record.VRNO,
+  dbName: process.env.FINEZ_DB_NAME,
+  authtoken: process.env.FINEZ_AUTH_TOKEN,
+  loginuser: process.env.FINEZ_LOGIN_USER,
+});
     } catch (error) {
       console.error(
         `[ORDER_WATCHER] Failed to process purchase order ${record.VRNO}:`,
