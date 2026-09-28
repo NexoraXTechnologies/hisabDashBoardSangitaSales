@@ -7,7 +7,10 @@ const {
 const {
   getPurchaseOrderData,
 } = require("../purchaseOrder/purchaseOrderService");
-const { syncPurchaseOrderMastersToFinez } = require("../finez/finezCustomMasterService");
+
+const {
+  syncPurchaseOrderMastersToFinez,
+} = require("../finez/finezCustomMasterService");
 
 let orderWatcherInterval = null;
 let orderWatcherInitialized = false;
@@ -85,31 +88,42 @@ const checkForNewOrderRecords = async () => {
       continue;
     }
 
-    processedOrderRecords.add(signature);
-
     console.log(
       `[ORDER_WATCHER] New purchase order detected: ${record.VRNO}`
     );
 
-    const purchaseOrderData =
-      await getPurchaseOrderData(record.VRNO);
+    try {
+      const purchaseOrderData =
+        await getPurchaseOrderData(record.VRNO);
 
-    console.dir(
-      purchaseOrderData,
-      {
-        depth: null,
-      }
-    );
+      console.dir(
+        purchaseOrderData,
+        {
+          depth: null,
+        }
+      );
 
-    await syncPurchaseOrderMastersToFinez({
-  purchaseOrderData,
-  dbName: process.env.FINEZ_DB_NAME,
-  authtoken: process.env.FINEZ_AUTH_TOKEN,
-  loginuser: process.env.FINEZ_LOGIN_USER,
-});
+      await syncPurchaseOrderMastersToFinez({
+        purchaseOrderData,
+        dbName: process.env.FINEZ_DB_NAME,
+        authtoken: process.env.FINEZ_AUTH_TOKEN,
+        loginuser: process.env.FINEZ_LOGIN_USER,
+      });
 
-// ⭐ Future
-// await sendPurchaseOrderToBookEZ(purchaseOrderData);
+      processedOrderRecords.add(signature);
+
+      console.log(
+        `[ORDER_WATCHER] Purchase order processed successfully: ${record.VRNO}`
+      );
+
+      // ⭐ Future
+      // await sendPurchaseOrderToBookEZ(purchaseOrderData);
+    } catch (error) {
+      console.error(
+        `[ORDER_WATCHER] Failed to process purchase order ${record.VRNO}:`,
+        error
+      );
+    }
   }
 };
 
@@ -124,10 +138,14 @@ const startOrderWatcher = async () => {
 
   await initializeOrderWatcher();
 
-  orderWatcherInterval = setInterval(
-    checkForNewOrderRecords,
-    intervalMs
-  );
+  orderWatcherInterval = setInterval(() => {
+    checkForNewOrderRecords().catch((error) => {
+      console.error(
+        "[ORDER_WATCHER] Error while checking new purchase orders:",
+        error
+      );
+    });
+  }, intervalMs);
 
   console.log(
     `[ORDER_WATCHER] Started with ${intervalMs}ms interval`

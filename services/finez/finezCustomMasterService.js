@@ -436,6 +436,14 @@ const syncPurchaseOrderMastersToFinez = async ({
       `[FINEZ_CUSTOM_MASTER] Syncing masters for purchase order ${order.vrno}`
     );
 
+    // ⭐ ACCOUNT MASTER
+    await saveAccountMaster({
+      accountMaster: order.accountMaster,
+      dbName,
+      authtoken,
+      loginuser,
+    });
+
     await saveMineMaster({
       makeMaster: order.makeMaster,
       dbName,
