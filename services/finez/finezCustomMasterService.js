@@ -3,8 +3,8 @@ const {
   apiPost,
 } = require("../../utils/apiUtils/externalApiClient.js");
 
-const MINE_MASTER_MODULE_CODE = "CSTM-000002";
-const COST_CENTER_MODULE_CODE = "CSTM-000001";
+const MINE_MASTER_MODULE_CODE = "CSTM-000001";
+const COST_CENTER_MODULE_CODE = "CSTM-000002";
 
 const getCustomMasterData = async ({
   moduleCode,
