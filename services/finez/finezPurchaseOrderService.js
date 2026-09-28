@@ -1029,21 +1029,21 @@ const sendPurchaseOrderToBookEZ = async ({
 
   // 🟣⭐ KEEP POST COMMENTED UNTIL PAYLOAD IS VERIFIED
 
-  // const response = await apiPost(
-  //   "/users/bookez/purchaseFlow/purchaseOrder/save",
-  //   payload,
-  //   {
-  //     dbName,
-  //     authtoken,
-  //     loginuser,
-  //   }
-  // );
+  const response = await apiPost(
+    "/users/bookez/purchaseFlow/purchaseOrder/save",
+    payload,
+    {
+      dbName,
+      authtoken,
+      loginuser,
+    }
+  );
 
-  // console.log(
-  //   `[FINEZ_PURCHASE_ORDER] Purchase order ${vrno} saved successfully`
-  // );
+  console.log(
+    `[FINEZ_PURCHASE_ORDER] Purchase order ${vrno} saved successfully`
+  );
 
-  // return response;
+  return response;
 
 
   // 🟣⭐ FOR NOW RETURN ONLY GENERATED PAYLOAD
