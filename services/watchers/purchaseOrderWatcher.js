@@ -7,6 +7,7 @@ const {
 const {
   getPurchaseOrderData,
 } = require("../purchaseOrder/purchaseOrderService");
+const { syncPurchaseOrderMastersToFinez } = require("../finez/finezCustomMasterService");
 
 let orderWatcherInterval = null;
 let orderWatcherInitialized = false;
@@ -100,8 +101,15 @@ const checkForNewOrderRecords = async () => {
       }
     );
 
-    // ⭐ Future
-    // await sendPurchaseOrderToBookEZ(purchaseOrderData);
+    await syncPurchaseOrderMastersToFinez({
+  purchaseOrderData,
+  dbName: process.env.FINEZ_DB_NAME,
+  authtoken: process.env.FINEZ_AUTH_TOKEN,
+  loginuser: process.env.FINEZ_LOGIN_USER,
+});
+
+// ⭐ Future
+// await sendPurchaseOrderToBookEZ(purchaseOrderData);
   }
 };
 
