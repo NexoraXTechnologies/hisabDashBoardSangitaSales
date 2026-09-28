@@ -96,6 +96,63 @@ const getPurchaseOrderData = async (vrno) => {
   }
 };
 
+
+
+// ⭐ PURCHASE ORDER TRANSACTION DATA
+
+const getPurchaseOrderTransactionData = async (vrno) => {
+  let connection;
+
+  try {
+    connection = await getOracleConnection();
+
+    const result = await connection.execute(
+      `
+      SELECT
+        OH.VRNO,
+        OH.VRDATE,
+        OH.ACC_CODE,
+        OB.MAKE_CODE,
+        OB.COST_CODE,
+        OB.ITEM_CODE,
+        OH.VALIDUPTO_DATE,
+        OB.QTYORDER,
+        OB.QTYCANCELLED,
+        OB.RATE,
+        OB.TAX_ONAMOUNT,
+        OB.TAX_RATE1,
+        OB.TAX_AMOUNT1,
+        OB.AFIELD8
+      FROM ORDER_HEAD OH, ORDER_BODY OB
+      WHERE OH.VRNO = OB.VRNO
+        AND OH.TRANTYPE = 'PD'
+        AND OH.VRNO = :vrno
+      `,
+      {
+        vrno,
+      },
+      {
+        outFormat: oracledb.OUT_FORMAT_OBJECT,
+      }
+    );
+
+    return result.rows || [];
+  } catch (error) {
+    console.error(
+      `[PURCHASE_ORDER] Failed to fetch transaction data ${vrno}:`,
+      error.message
+    );
+
+    throw error;
+  } finally {
+    if (connection) {
+      await connection.close();
+    }
+  }
+};
+
+
 module.exports = {
   getPurchaseOrderData,
+  getPurchaseOrderTransactionData,
 };
