@@ -317,6 +317,8 @@ const getFineZProductByLhsCode = async ({
 
 // 🟣⭐ BUILD FINAL PURCHASE ORDER PAYLOAD
 
+// 🟣⭐ BUILD FINAL PURCHASE ORDER PAYLOAD
+
 const buildPurchaseOrderPayload = ({
   rows,
   vendor,
@@ -351,32 +353,89 @@ const buildPurchaseOrderPayload = ({
       const product =
         products[index];
 
-      // 🟣⭐ Excel Mapping: QTYORDER → quantity
       const quantity =
         toNumber(row.QTYORDER);
 
-      // 🟣⭐ Excel Mapping: RATE → rate
       const rate =
         toNumber(row.RATE);
 
-      // 🟣⭐ Excel Mapping: TAX_ONAMOUNT → gross
       const grossAmount =
         toNumber(row.TAX_ONAMOUNT);
 
-      /*
-       * 🟣⭐ Not mapped/provided currently.
-       * Keep empty/zero instead of inventing values.
-       */
-
       const discountAmount = 0;
 
-      const cgstAmount = 0;
 
-      const sgstAmount = 0;
+      // 🔴⭐ UPDATED TAX LOGIC START
 
-      const igstAmount = 0;
+      const taxRate =
+        toNumber(row.TAX_RATE);
 
-      const taxAmount = 0;
+      const taxAmountValue =
+        toNumber(row.TAX_AMOUNT);
+
+      const taxRate1 =
+        toNumber(row.TAX_RATE1);
+
+      const taxAmount1Value =
+        toNumber(row.TAX_AMOUNT1);
+
+      const hasFirstTax =
+        taxRate > 0 ||
+        taxAmountValue > 0;
+
+      const hasSecondTax =
+        taxRate1 > 0 ||
+        taxAmount1Value > 0;
+
+      const hasCgstSgst =
+        hasFirstTax &&
+        hasSecondTax;
+
+      const cgstPercentage =
+        hasCgstSgst
+          ? taxRate
+          : 0;
+
+      const cgstAmount =
+        hasCgstSgst
+          ? taxAmountValue
+          : 0;
+
+      const sgstPercentage =
+        hasCgstSgst
+          ? taxRate1
+          : 0;
+
+      const sgstAmount =
+        hasCgstSgst
+          ? taxAmount1Value
+          : 0;
+
+      const igstPercentage =
+        !hasCgstSgst
+          ? (
+              taxRate ||
+              taxRate1 ||
+              0
+            )
+          : 0;
+
+      const igstAmount =
+        !hasCgstSgst
+          ? (
+              taxAmountValue ||
+              taxAmount1Value ||
+              0
+            )
+          : 0;
+
+      const taxAmount =
+        cgstAmount +
+        sgstAmount +
+        igstAmount;
+
+      // 🔴⭐ UPDATED TAX LOGIC END
+
 
       const otherAmount = 0;
 
@@ -388,6 +447,48 @@ const buildPurchaseOrderPayload = ({
         taxableAmount +
         taxAmount +
         otherAmount;
+
+
+      // 🔴⭐ TAX DEBUG LOG
+
+      console.log(
+        `[FINEZ_PURCHASE_ORDER] Tax mapping for ITEM_CODE ${row.ITEM_CODE}:`,
+        {
+          oracle: {
+            TAX_RATE:
+              row.TAX_RATE,
+
+            TAX_AMOUNT:
+              row.TAX_AMOUNT,
+
+            TAX_RATE1:
+              row.TAX_RATE1,
+
+            TAX_AMOUNT1:
+              row.TAX_AMOUNT1,
+          },
+
+          finez: {
+            cgst:
+              cgstPercentage,
+
+            cgstAmount,
+
+            sgst:
+              sgstPercentage,
+
+            sgstAmount,
+
+            igst:
+              igstPercentage,
+
+            igstAmount,
+
+            taxAmount,
+          },
+        }
+      );
+
 
       totalQuantity +=
         quantity;
@@ -417,7 +518,6 @@ const buildPurchaseOrderPayload = ({
         netAmount;
 
       return {
-        // 🟣⭐ Product Master data resolved using Oracle ITEM_CODE
         productCode:
           product?.productCode ||
           "",
@@ -451,7 +551,6 @@ const buildPurchaseOrderPayload = ({
         quantity:
           String(quantity),
 
-        // 🟣⭐ Take UOM from Product Master
         unit:
           product?.unit ||
           product?.uom ||
@@ -471,7 +570,6 @@ const buildPurchaseOrderPayload = ({
         grossAmount:
           toAmount(grossAmount),
 
-        // 🟣⭐ Not supplied by current mapping
         discount: "",
 
         discountPercentage: "",
@@ -482,24 +580,50 @@ const buildPurchaseOrderPayload = ({
         taxableAmount:
           toAmount(taxableAmount),
 
-        // 🟣⭐ Tax mapping not finalized yet
-        cgst: "",
 
-        cgstPercentage: "",
+        // 🔴⭐ UPDATED CGST
+
+        cgst:
+          cgstPercentage
+            ? String(cgstPercentage)
+            : "",
+
+        cgstPercentage:
+          cgstPercentage
+            ? String(cgstPercentage)
+            : "",
 
         cgstAmount:
           toAmount(cgstAmount),
 
-        sgst: "",
 
-        sgstPercentage: "",
+        // 🔴⭐ UPDATED SGST
+
+        sgst:
+          sgstPercentage
+            ? String(sgstPercentage)
+            : "",
+
+        sgstPercentage:
+          sgstPercentage
+            ? String(sgstPercentage)
+            : "",
 
         sgstAmount:
           toAmount(sgstAmount),
 
-        igst: "",
 
-        igstPercentage: "",
+        // 🔴⭐ UPDATED IGST
+
+        igst:
+          igstPercentage
+            ? String(igstPercentage)
+            : "",
+
+        igstPercentage:
+          igstPercentage
+            ? String(igstPercentage)
+            : "",
 
         igstAmount:
           toAmount(igstAmount),
@@ -517,8 +641,6 @@ const buildPurchaseOrderPayload = ({
           toAmount(netAmount),
       };
     });
-
-  // 🟣⭐ Extract Custom Master actual code/name
 
   const mineCode =
     mineMaster?.code ||
@@ -543,17 +665,14 @@ const buildPurchaseOrderPayload = ({
     "";
 
   const payload = {
-    // 🟣⭐ Excel Mapping: VRNO → lhsPoVrNo
     lhsPoVrNo:
       firstRow.VRNO || "",
 
-    // 🟣⭐ Excel Mapping: VRDATE → Purchase Order Date
     pOrdVoucherDate:
       formatOracleDate(
         firstRow.VRDATE
       ),
 
-    // 🟣⭐ ACC_CODE resolved from FineEZ Account Master
     pOrdVendorCode:
       vendor?.accountCode ||
       "",
@@ -567,7 +686,6 @@ const buildPurchaseOrderPayload = ({
     pOrdStatus:
       "open",
 
-    // 🟣⭐ Excel Mapping: ENTRY_REMARK → Remarks
     pOrdRemark:
       firstRow.ENTRY_REMARK ||
       "",
@@ -584,9 +702,6 @@ const buildPurchaseOrderPayload = ({
 
     vehicleName: "",
 
-    // 🟣⭐ Excel Mapping:
-    // MAKE_CODE → Mine Master
-    // COST_CODE → Cost Center
     customMasters: {
       "Mine Master": {
         code:
@@ -702,6 +817,7 @@ const buildPurchaseOrderPayload = ({
 
   return payload;
 };
+
 
 
 // 🟣⭐ PREPARE PURCHASE ORDER

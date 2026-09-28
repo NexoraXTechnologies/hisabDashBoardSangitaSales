@@ -127,6 +127,8 @@ const getPurchaseOrderTransactionData = async (vrno) => {
         OB.QTYCANCELLED,
         OB.RATE,
         OB.TAX_ONAMOUNT,
+        OB.TAX_RATE,
+        OB.TAX_AMOUNT,
         OB.TAX_RATE1,
         OB.TAX_AMOUNT1,
         OB.AFIELD8
