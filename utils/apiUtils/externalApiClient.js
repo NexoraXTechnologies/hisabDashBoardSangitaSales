@@ -1,18 +1,24 @@
 const axios = require("axios");
 
 const EXTERNAL_API_BASE_URL =
-  process.env.EXTERNAL_API_BASE_URL
+  process.env.EXTERNAL_API_BASE_URL;
 
 const normalizeBaseUrl = (url) => {
   if (!url) {
-    throw new Error("EXTERNAL_API_BASE_URL is not configured");
+    throw new Error(
+      "EXTERNAL_API_BASE_URL is not configured"
+    );
   }
 
-  return url.endsWith("/") ? url : `${url}/`;
+  return String(url)
+    .trim()
+    .replace(/\/+$/, "");
 };
 
 const externalApiClient = axios.create({
-  baseURL: normalizeBaseUrl(EXTERNAL_API_BASE_URL),
+  baseURL: normalizeBaseUrl(
+    EXTERNAL_API_BASE_URL
+  ),
   timeout: 60000,
   headers: {
     Accept: "application/json",
@@ -21,10 +27,39 @@ const externalApiClient = axios.create({
 
 externalApiClient.interceptors.request.use(
   (config) => {
-    console.log("[EXTERNAL_API] Request:", {
-      method: config.method?.toUpperCase(),
-      url: `${config.baseURL || ""}${config.url || ""}`,
-    });
+    const headers = config.headers || {};
+
+    console.log(
+      "[EXTERNAL_API] Request:",
+      {
+        method:
+          config.method?.toUpperCase(),
+
+        url:
+          `${config.baseURL || ""}${config.url || ""}`,
+
+        params:
+          config.params || {},
+
+        hasDbName:
+          Boolean(
+            headers["x-db-name"] ||
+            headers.get?.("x-db-name")
+          ),
+
+        hasAuthToken:
+          Boolean(
+            headers["authtoken"] ||
+            headers.get?.("authtoken")
+          ),
+
+        hasLoginUser:
+          Boolean(
+            headers["loginuser"] ||
+            headers.get?.("loginuser")
+          ),
+      }
+    );
 
     return config;
   },
@@ -34,44 +69,79 @@ externalApiClient.interceptors.request.use(
       error.message
     );
 
-    return Promise.reject(error);
+    return Promise.reject(
+      error
+    );
   }
 );
 
 externalApiClient.interceptors.response.use(
   (response) => {
-    console.log("[EXTERNAL_API] Response:", {
-      method: response.config?.method?.toUpperCase(),
-      url: response.config?.url,
-      status: response.status,
-    });
+    console.log(
+      "[EXTERNAL_API] Response:",
+      {
+        method:
+          response.config?.method?.toUpperCase(),
+
+        url:
+          response.config?.url,
+
+        status:
+          response.status,
+      }
+    );
 
     return response;
   },
   (error) => {
     const normalizedError = {
       success: false,
-      status: error.response?.status || 500,
+
+      status:
+        error.response?.status ||
+        500,
+
       code:
         error.response?.data?.code ||
         error.code ||
         "EXTERNAL_API_ERROR",
+
       message:
         error.response?.data?.message ||
         error.message ||
         "External API request failed",
-      error: error.response?.data || null,
+
+      error:
+        error.response?.data ||
+        null,
     };
 
-    console.error("[EXTERNAL_API] Error:", {
-      method: error.config?.method?.toUpperCase(),
-      url: error.config?.url,
-      status: error.response?.status,
-      code: normalizedError.code,
-      message: normalizedError.message,
-    });
+    console.error(
+      "[EXTERNAL_API] Error:",
+      {
+        method:
+          error.config?.method?.toUpperCase(),
 
-    return Promise.reject(normalizedError);
+        url:
+          error.config?.url,
+
+        status:
+          error.response?.status,
+
+        code:
+          normalizedError.code,
+
+        message:
+          normalizedError.message,
+
+        responseType:
+          typeof error.response?.data,
+      }
+    );
+
+    return Promise.reject(
+      normalizedError
+    );
   }
 );
 
@@ -86,15 +156,18 @@ const buildHeaders = ({
   };
 
   if (dbName) {
-    headers["x-db-name"] = dbName;
+    headers["x-db-name"] =
+      dbName;
   }
 
   if (authtoken) {
-    headers["authtoken"] = authtoken;
+    headers["authtoken"] =
+      authtoken;
   }
 
   if (loginuser) {
-    headers["loginuser"] = loginuser;
+    headers["loginuser"] =
+      loginuser;
   }
 
   return headers;
@@ -111,16 +184,24 @@ const apiGet = async (
     ...config
   } = {}
 ) => {
-  const response = await externalApiClient.get(url, {
-    ...config,
-    params,
-    headers: buildHeaders({
-      dbName,
-      authtoken,
-      loginuser,
-      additionalHeaders: headers,
-    }),
-  });
+  const response =
+    await externalApiClient.get(
+      url,
+      {
+        ...config,
+
+        params,
+
+        headers:
+          buildHeaders({
+            dbName,
+            authtoken,
+            loginuser,
+            additionalHeaders:
+              headers,
+          }),
+      }
+    );
 
   return response.data;
 };
@@ -136,18 +217,28 @@ const apiPost = async (
     ...config
   } = {}
 ) => {
-  const response = await externalApiClient.post(url, data, {
-    ...config,
-    headers: buildHeaders({
-      dbName,
-      authtoken,
-      loginuser,
-      additionalHeaders: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-    }),
-  });
+  const response =
+    await externalApiClient.post(
+      url,
+      data,
+      {
+        ...config,
+
+        headers:
+          buildHeaders({
+            dbName,
+            authtoken,
+            loginuser,
+
+            additionalHeaders: {
+              "Content-Type":
+                "application/json",
+
+              ...headers,
+            },
+          }),
+      }
+    );
 
   return response.data;
 };
@@ -162,19 +253,29 @@ const apiPut = async (
     headers = {},
     ...config
   } = {}
-) => {  
-  const response = await externalApiClient.put(url, data, {
-    ...config,
-    headers: buildHeaders({
-      dbName,
-      authtoken,
-      loginuser,
-      additionalHeaders: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-    }),
-  });
+) => {
+  const response =
+    await externalApiClient.put(
+      url,
+      data,
+      {
+        ...config,
+
+        headers:
+          buildHeaders({
+            dbName,
+            authtoken,
+            loginuser,
+
+            additionalHeaders: {
+              "Content-Type":
+                "application/json",
+
+              ...headers,
+            },
+          }),
+      }
+    );
 
   return response.data;
 };
@@ -190,18 +291,28 @@ const apiPatch = async (
     ...config
   } = {}
 ) => {
-  const response = await externalApiClient.patch(url, data, {
-    ...config,
-    headers: buildHeaders({
-      dbName,
-      authtoken,
-      loginuser,
-      additionalHeaders: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-    }),
-  });
+  const response =
+    await externalApiClient.patch(
+      url,
+      data,
+      {
+        ...config,
+
+        headers:
+          buildHeaders({
+            dbName,
+            authtoken,
+            loginuser,
+
+            additionalHeaders: {
+              "Content-Type":
+                "application/json",
+
+              ...headers,
+            },
+          }),
+      }
+    );
 
   return response.data;
 };
@@ -218,17 +329,26 @@ const apiDelete = async (
     ...config
   } = {}
 ) => {
-  const response = await externalApiClient.delete(url, {
-    ...config,
-    params,
-    data,
-    headers: buildHeaders({
-      dbName,
-      authtoken,
-      loginuser,
-      additionalHeaders: headers,
-    }),
-  });
+  const response =
+    await externalApiClient.delete(
+      url,
+      {
+        ...config,
+
+        params,
+
+        data,
+
+        headers:
+          buildHeaders({
+            dbName,
+            authtoken,
+            loginuser,
+            additionalHeaders:
+              headers,
+          }),
+      }
+    );
 
   return response.data;
 };
