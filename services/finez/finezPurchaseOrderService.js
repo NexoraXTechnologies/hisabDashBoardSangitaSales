@@ -211,67 +211,93 @@ const getFineZProductByLhsCode = async ({
     `[FINEZ_PURCHASE_ORDER] Looking for product using LHSItemCode: ${itemCode}`
   );
 
-  const response = await apiGet(
-    "/users/productMaster/getAll",
-    {
-      dbName,
-      authtoken,
-      loginuser,
-      params: {
-        offset: 0,
-        limit: 500,
-      },
-    }
-  );
-
-  const products =
-    response?.data?.items ||
-    response?.data ||
-    response?.records ||
-    response?.result ||
-    [];
-
-  if (!Array.isArray(products)) {
-    console.log(
-      `[FINEZ_PURCHASE_ORDER] Invalid Product Master response`
-    );
-
-    return null;
-  }
-
   const normalizedItemCode =
     normalizeValue(itemCode);
 
-  const product =
-    products.find((product) => {
-      const lhsItemCode =
-        product?.dynamicFields?.LHSItemCode ||
-        "";
+  let offset = 0;
 
-      return (
-        normalizeValue(lhsItemCode) ===
-        normalizedItemCode
-      );
-    }) || null;
+  const limit = 200;
 
-  if (product) {
-    console.log(
-      `[FINEZ_PURCHASE_ORDER] Product resolved ${itemCode} → ${product.productCode || ""} - ${product.productName || ""}`
-    );
-
-    console.dir(
-      product,
+  while (true) {
+    const response = await apiGet(
+      "/productMaster/getAllProduct",
       {
-        depth: null,
+        dbName,
+        authtoken,
+        loginuser,
+        params: {
+          offset,
+          limit,
+        },
       }
     );
-  } else {
-    console.log(
-      `[FINEZ_PURCHASE_ORDER] Product not found for LHSItemCode: ${itemCode}`
-    );
-  }
 
-  return product;
+    const products =
+      response?.data?.items ||
+      response?.data ||
+      response?.records ||
+      response?.result ||
+      [];
+
+    console.log(
+      `[FINEZ_PURCHASE_ORDER] Checking ${Array.isArray(products) ? products.length : 0} product(s), offset ${offset}`
+    );
+
+    if (!Array.isArray(products)) {
+      console.log(
+        "[FINEZ_PURCHASE_ORDER] Invalid Product Master response"
+      );
+
+      console.dir(
+        response,
+        {
+          depth: null,
+        }
+      );
+
+      return null;
+    }
+
+    const product =
+      products.find((product) => {
+        const lhsItemCode =
+          product?.dynamicFields?.LHSItemCode ||
+          "";
+
+        return (
+          normalizeValue(lhsItemCode) ===
+          normalizedItemCode
+        );
+      }) || null;
+
+    if (product) {
+      console.log(
+        `[FINEZ_PURCHASE_ORDER] Product resolved ${itemCode} → ${product.productCode || ""} - ${product.productName || ""}`
+      );
+
+      console.dir(
+        product,
+        {
+          depth: null,
+        }
+      );
+
+      return product;
+    }
+
+    const hasNextPage =
+      response?.data?.pagination?.hasNextPage === true;
+
+    if (!hasNextPage) {
+      console.log(
+        `[FINEZ_PURCHASE_ORDER] Product not found for LHSItemCode: ${itemCode}`
+      );
+
+      return null;
+    }
+
+    offset += limit;
+  }
 };
 
 
