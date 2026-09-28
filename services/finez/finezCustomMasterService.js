@@ -88,7 +88,6 @@ const customMasterAlreadyExists = async ({
     );
   });
 };
-
 const saveCustomMasterData = async ({
   moduleCode,
   code,
@@ -109,31 +108,6 @@ const saveCustomMasterData = async ({
     throw new Error("Custom master name is required");
   }
 
-  const alreadyExists =
-    await customMasterAlreadyExists({
-      moduleCode,
-      code,
-      name,
-      dbName,
-      authtoken,
-      loginuser,
-    });
-
-  if (alreadyExists) {
-    console.log(
-      `[FINEZ_CUSTOM_MASTER] Already exists. Skipping ${moduleCode} - ${code} - ${name}`
-    );
-
-    return {
-      success: true,
-      skipped: true,
-      reason: "ALREADY_EXISTS",
-      moduleCode,
-      code,
-      name,
-    };
-  }
-
   const payload = {
     moduleCode,
     data: {
@@ -147,21 +121,45 @@ const saveCustomMasterData = async ({
     payload
   );
 
-  const response = await apiPost(
-    "/users/customMaster/data/save",
-    payload,
-    {
-      dbName,
-      authtoken,
-      loginuser,
+  try {
+    const response = await apiPost(
+      "/users/customMaster/data/save",
+      payload,
+      {
+        dbName,
+        authtoken,
+        loginuser,
+      }
+    );
+
+    console.log(
+      `[FINEZ_CUSTOM_MASTER] Saved successfully ${moduleCode} - ${code}`
+    );
+
+    return response;
+  } catch (error) {
+    if (error?.status === 409) {
+      console.log(
+        `[FINEZ_CUSTOM_MASTER] Duplicate found. Skipping ${moduleCode} - ${code} - ${name}`
+      );
+
+      return {
+        success: true,
+        skipped: true,
+        reason: "ALREADY_EXISTS",
+        moduleCode,
+        code,
+        name,
+      };
     }
-  );
 
-  console.log(
-    `[FINEZ_CUSTOM_MASTER] Saved successfully ${moduleCode} - ${code}`
-  );
+    console.error(
+      `[FINEZ_CUSTOM_MASTER] Failed to save ${moduleCode} - ${code}:`,
+      error
+    );
 
-  return response;
+    throw error;
+  }
 };
 
 const saveMineMaster = async ({
