@@ -13,6 +13,8 @@ const {
   startOrderWatcher,
   stopOrderWatcher,
 } = require("./services/watchers/purchaseOrderWatcher");
+const { startGrnWatcher, stopGrnWatcher } = require("./services/watchers/grnWatcher");
+
 
 const app = express();
 
@@ -88,6 +90,8 @@ const connectOracleDatabase = async () => {
 
     // ⭐ Start Purchase Order watcher only after Oracle is connected
     await startOrderWatcher();
+        // ★★★ NEW - Start GRN watcher
+    await startGrnWatcher();
   } catch (error) {
     oracleConnected = false;
 
@@ -116,6 +120,8 @@ const shutdown = async (signal) => {
 
     // ⭐ Stop watcher before closing Oracle pool
     stopOrderWatcher();
+        // ★★★ NEW - Stop GRN watcher
+    stopGrnWatcher();
 
     await closeOraclePool();
 
